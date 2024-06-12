@@ -1,0 +1,12 @@
+server4:
+    listen:
+        - '%vlan800'
+    plugins:
+        - lease_time: 3600s
+        - server_id: 192.168.1.10
+        - file: file_leases2.txt
+        - mtu: 1500
+        - router: 192.168.203.1
+        - netmask: 255.255.255.255
+        - range: leases800.txt 192.168.203.10 192.168.203.50 60s
+        - staticroute: 10.20.21.0/24,192.168.203.1 192.168.203.0/24,192.168.203.1

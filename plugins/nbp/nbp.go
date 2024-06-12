@@ -61,7 +61,7 @@ func parseArgs(args ...string) (*url.URL, error) {
 	return url.Parse(args[0])
 }
 
-func setup6(args ...string) (handler.Handler6, error) {
+func setup6(Listiner string, args ...string) (handler.Handler6, error) {
 	u, err := parseArgs(args...)
 	if err != nil {
 		return nil, err
@@ -78,7 +78,7 @@ func setup6(args ...string) (handler.Handler6, error) {
 	return nbpHandler6, nil
 }
 
-func setup4(args ...string) (handler.Handler4, error) {
+func setup4(Listiner string, args ...string) (handler.Handler4, error) {
 	u, err := parseArgs(args...)
 	if err != nil {
 		return nil, err
@@ -99,7 +99,7 @@ func setup4(args ...string) (handler.Handler4, error) {
 	return nbpHandler4, nil
 }
 
-func nbpHandler6(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
+func nbpHandler6(Listiner string, req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
 	if opt59 == nil {
 		// nothing to do
 		return resp, true
@@ -125,7 +125,7 @@ func nbpHandler6(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
 	return resp, true
 }
 
-func nbpHandler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
+func nbpHandler4(Listiner string, req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
 	if opt67 == nil {
 		// nothing to do
 		return resp, true

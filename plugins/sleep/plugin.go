@@ -44,7 +44,7 @@ var Plugin = plugins.Plugin{
 	Setup4: setup4,
 }
 
-func setup6(args ...string) (handler.Handler6, error) {
+func setup6(Listiner string, args ...string) (handler.Handler6, error) {
 	if len(args) != 1 {
 		return nil, fmt.Errorf("want exactly one argument, got %d", len(args))
 	}
@@ -53,10 +53,10 @@ func setup6(args ...string) (handler.Handler6, error) {
 		return nil, fmt.Errorf("failed to parse duration: %w", err)
 	}
 	log.Printf("loaded plugin for DHCPv6.")
-	return makeSleepHandler6(delay), nil
+	return makeSleepHandler6(Listiner, delay), nil
 }
 
-func setup4(args ...string) (handler.Handler4, error) {
+func setup4(Listiner string, args ...string) (handler.Handler4, error) {
 	if len(args) != 1 {
 		return nil, fmt.Errorf("want exactly one argument, got %d", len(args))
 	}
@@ -65,11 +65,11 @@ func setup4(args ...string) (handler.Handler4, error) {
 		return nil, fmt.Errorf("failed to parse duration: %w", err)
 	}
 	log.Printf("loaded plugin for DHCPv4.")
-	return makeSleepHandler4(delay), nil
+	return makeSleepHandler4(Listiner, delay), nil
 }
 
-func makeSleepHandler6(delay time.Duration) handler.Handler6 {
-	return func(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
+func makeSleepHandler6(Listiner string, delay time.Duration) handler.Handler6 {
+	return func(Listiner string, req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
 		log.Printf("introducing delay of %s in response", delay)
 		// return the unmodified response, and instruct coredhcp to continue to
 		// the next plugin.
@@ -78,8 +78,8 @@ func makeSleepHandler6(delay time.Duration) handler.Handler6 {
 	}
 }
 
-func makeSleepHandler4(delay time.Duration) handler.Handler4 {
-	return func(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
+func makeSleepHandler4(Listiner string, delay time.Duration) handler.Handler4 {
+	return func(Listiner string, req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
 		log.Printf("introducing delay of %s in response", delay)
 		// return the unmodified response, and instruct coredhcp to continue to
 		// the next plugin.

@@ -10,12 +10,13 @@ import (
 	"net"
 	"strconv"
 	"strings"
-
+	//"bytes"
 	"github.com/coredhcp/coredhcp/logger"
 	"github.com/insomniacslk/dhcp/dhcpv4"
 	"github.com/insomniacslk/dhcp/dhcpv6"
 	"github.com/spf13/cast"
 	"github.com/spf13/viper"
+	//"github.com/vorlon001/viper"
 )
 
 var log = logger.GetLogger("config")
@@ -54,7 +55,7 @@ type PluginConfig struct {
 
 // Load reads a configuration file and returns a Config object, or an error if
 // any.
-func Load(pathOverride string) (*Config, error) {
+func Load(Listiner string, format string, buffer []byte, pathOverride string) (*Config, error) {
 	log.Print("Loading configuration")
 	c := New()
 	c.v.SetConfigType("yml")
@@ -68,13 +69,13 @@ func Load(pathOverride string) (*Config, error) {
 		c.v.AddConfigPath("/etc/coredhcp/")
 	}
 
-	if err := c.v.ReadInConfig(); err != nil {
+	if err := c.v.ReadInConfigfromBuffer("yml",buffer); err != nil {
 		return nil, err
 	}
-	if err := c.parseConfig(protocolV6); err != nil {
+	if err := c.parseConfig(Listiner, protocolV6); err != nil {
 		return nil, err
 	}
-	if err := c.parseConfig(protocolV4); err != nil {
+	if err := c.parseConfig(Listiner, protocolV4); err != nil {
 		return nil, err
 	}
 	if c.Server6 == nil && c.Server4 == nil {
@@ -90,28 +91,31 @@ func protoVersionCheck(v protocolVersion) error {
 	return nil
 }
 
-func parsePlugins(pluginList []interface{}) ([]PluginConfig, error) {
+func parsePlugins(Listiner string, pluginList []interface{}) ([]PluginConfig, error) {
 	plugins := make([]PluginConfig, 0, len(pluginList))
 	for idx, val := range pluginList {
 		conf := cast.ToStringMap(val)
+
 		if conf == nil {
-			return nil, ConfigErrorFromString("dhcpv6: plugin #%d is not a string map", idx)
+			return nil, ConfigErrorFromString("Listiner: %s, dhcpv6: plugin #%d is not a string map", Listiner, idx)
 		}
 		// make sure that only one item is specified, since it's a
 		// map name -> args
 		if len(conf) != 1 {
-			return nil, ConfigErrorFromString("dhcpv6: exactly one plugin per item can be specified")
+			return nil, ConfigErrorFromString("Listiner %s, dhcpv6: exactly one plugin per item can be specified", Listiner)
 		}
 		var (
 			name string
 			args []string
 		)
 		// only one item, as enforced above, so read just that
+
 		for k, v := range conf {
 			name = k
 			args = strings.Fields(cast.ToString(v))
 			break
 		}
+
 		plugins = append(plugins, PluginConfig{Name: name, Args: args})
 	}
 	return plugins, nil
@@ -195,7 +199,7 @@ func (c *Config) getListenAddress(addr string, ver protocolVersion) (*net.UDPAdd
 	return &listener, nil
 }
 
-func (c *Config) getPlugins(ver protocolVersion) ([]PluginConfig, error) {
+func (c *Config) getPlugins(Listiner string, ver protocolVersion) ([]PluginConfig, error) {
 	if err := protoVersionCheck(ver); err != nil {
 		return nil, err
 	}
@@ -203,10 +207,11 @@ func (c *Config) getPlugins(ver protocolVersion) ([]PluginConfig, error) {
 	if pluginList == nil {
 		return nil, ConfigErrorFromString("dhcpv%d: invalid plugins section, not a list or no plugin specified", ver)
 	}
-	return parsePlugins(pluginList)
+	log.Printf("Listiner: %s, %v", Listiner, pluginList)
+	return parsePlugins(Listiner, pluginList)
 }
 
-func (c *Config) parseConfig(ver protocolVersion) error {
+func (c *Config) parseConfig(Listiner string, ver protocolVersion) error {
 	if err := protoVersionCheck(ver); err != nil {
 		return err
 	}
@@ -215,12 +220,12 @@ func (c *Config) parseConfig(ver protocolVersion) error {
 		return nil
 	}
 	// read plugin configuration
-	plugins, err := c.getPlugins(ver)
+	plugins, err := c.getPlugins(Listiner, ver)
 	if err != nil {
 		return err
 	}
 	for _, p := range plugins {
-		log.Printf("DHCPv%d: found plugin `%s` with %d args: %v", ver, p.Name, len(p.Args), p.Args)
+		log.Printf("Listiner: %s, DHCPv%d: found plugin `%s` with %d args: %v", Listiner, ver, p.Name, len(p.Args), p.Args)
 	}
 
 	listeners, err := c.parseListen(ver)

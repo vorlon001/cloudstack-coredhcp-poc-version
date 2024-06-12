@@ -1,0 +1,56 @@
+config:
+    vlan200:
+        server4:
+            listen:
+                - "%vlan200"
+            plugins:
+                - lease_time: 3600s
+                - server_id: 192.168.1.10
+                - file: file_leases_vlan200.txt
+                - dns: 192.168.200.1
+                - mtu: 1500
+                - searchdomains: cloud.local
+                - router: 192.168.200.1
+                - netmask: 255.255.255.255
+                - range: leases_vlan200.txt 192.168.200.10 192.168.200.50 60s file_leases_vlan200.txt
+                - staticroute: 10.20.20.0/24,192.168.200.1 0.0.0.0/0,192.168.200.1
+    vlan400:
+        server4:
+            listen:
+                - "%vlan400"
+            plugins:
+                - lease_time: 3600s
+                - server_id: 192.168.1.10
+                - file: file_leases_vlan400.txt
+                - mtu: 1500
+                - router: 192.168.201.1
+                - netmask: 255.255.255.255
+                - range: leases_vlan400.txt 192.168.201.10 192.168.201.50 60s file_leases_vlan400.txt
+                - staticroute: 10.20.21.0/24,192.168.201.1 192.168.201.0/24,192.168.201.1
+    vlan600:
+        server4:
+            listen:
+                - "%vlan600"
+            plugins:
+                - lease_time: 3600s
+                - server_id: 192.168.1.10
+                - file: file_leases_vlan600.txt
+                - mtu: 1500
+                - router: 192.168.202.1
+                - netmask: 255.255.255.255
+                - range: leases_vlan600.txt 192.168.202.10 192.168.202.50 60s file_leases_vlan600.txt
+                - staticroute: 10.20.22.0/24,192.168.202.1 192.168.202.0/24,192.168.202.1
+
+    vlan800:
+        server4:
+            listen:
+                - "%vlan800"
+            plugins:
+                - lease_time: 3600s
+                - server_id: 192.168.1.10
+                - file: file_leases_vlan800.txt
+                - mtu: 1500
+                - router: 192.168.203.1
+                - netmask: 255.255.255.255
+                - range: leases_vlan800.txt 192.168.203.10 192.168.203.50 60s file_leases_vlan800.txt
+                - staticroute: 10.20.21.0/24,192.168.203.1 192.168.203.0/24,192.168.203.1

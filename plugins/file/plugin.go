@@ -61,7 +61,7 @@ var Plugin = plugins.Plugin{
 var recLock sync.RWMutex
 
 // StaticRecords holds a MAC -> IP address mapping
-var StaticRecords map[string]net.IP
+var StaticRecords map[string]map[string]net.IP
 
 // DHCPv6Records and DHCPv4Records are mappings between MAC addresses in
 // form of a string, to network configurations.
@@ -70,11 +70,17 @@ var (
 	DHCPv4Records map[string]net.IP
 )
 
+
+func init() {
+        StaticRecords = make(map[string]map[string]net.IP)
+}
+
+
 // LoadDHCPv4Records loads the DHCPv4Records global map with records stored on
 // the specified file. The records have to be one per line, a mac address and an
 // IPv4 address.
-func LoadDHCPv4Records(filename string) (map[string]net.IP, error) {
-	log.Infof("reading leases from %s", filename)
+func LoadDHCPv4Records(Listiner string, filename string) (map[string]net.IP, error) {
+	log.Infof("reading leases from %s, %s", Listiner, filename)
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
@@ -109,8 +115,8 @@ func LoadDHCPv4Records(filename string) (map[string]net.IP, error) {
 // LoadDHCPv6Records loads the DHCPv6Records global map with records stored on
 // the specified file. The records have to be one per line, a mac address and an
 // IPv6 address.
-func LoadDHCPv6Records(filename string) (map[string]net.IP, error) {
-	log.Infof("reading leases from %s", filename)
+func LoadDHCPv6Records(Listiner string, filename string) (map[string]net.IP, error) {
+	log.Infof("reading leases from %s, %s", Listiner, filename)
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
@@ -142,7 +148,8 @@ func LoadDHCPv6Records(filename string) (map[string]net.IP, error) {
 }
 
 // Handler6 handles DHCPv6 packets for the file plugin
-func Handler6(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
+func Handler6(Listiner string, req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
+        log.Infof(fmt.Sprintf("FILE: Handler6: %v,%v\n\t%v\n", Listiner, StaticRecords[Listiner],req))
 	m, err := req.GetInnerMessage()
 	if err != nil {
 		log.Errorf("BUG: could not decapsulate: %v", err)
@@ -164,12 +171,12 @@ func Handler6(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
 	recLock.RLock()
 	defer recLock.RUnlock()
 
-	ipaddr, ok := StaticRecords[mac.String()]
+	ipaddr, ok := StaticRecords[Listiner][mac.String()]
 	if !ok {
-		log.Warningf("MAC address %s is unknown", mac.String())
+		log.Warningf("Listiner: %s, MAC address %s is unknown", Listiner, mac.String())
 		return resp, false
 	}
-	log.Debugf("found IP address %s for MAC %s", ipaddr, mac.String())
+	log.Debugf("Listiner: %s: found IP address %s for MAC %s", Listiner, ipaddr, mac.String())
 
 	resp.AddOption(&dhcpv6.OptIANA{
 		IaId: m.Options.OneIANA().IaId,
@@ -185,31 +192,35 @@ func Handler6(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
 }
 
 // Handler4 handles DHCPv4 packets for the file plugin
-func Handler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
+func Handler4(Listiner string, req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
+        log.Infof(fmt.Sprintf("FILE: Handler4: %v,%v\n\t%v\n", Listiner, StaticRecords[Listiner],req))
 	recLock.RLock()
 	defer recLock.RUnlock()
 
-	ipaddr, ok := StaticRecords[req.ClientHWAddr.String()]
+	ipaddr, ok := StaticRecords[Listiner][req.ClientHWAddr.String()]
 	if !ok {
-		log.Warningf("MAC address %s is unknown", req.ClientHWAddr.String())
+		log.Warningf("Listiner: %s, MAC address %s is unknown", Listiner, req.ClientHWAddr.String())
 		return resp, false
-	}
+        }
+
+
+
 	resp.YourIPAddr = ipaddr
-	log.Debugf("found IP address %s for MAC %s", ipaddr, req.ClientHWAddr.String())
-	return resp, true
+	log.Debugf("Listiner: %s: found IP address %s for MAC %s", Listiner, ipaddr, req.ClientHWAddr.String())
+	return resp, false
 }
 
-func setup6(args ...string) (handler.Handler6, error) {
-	h6, _, err := setupFile(true, args...)
+func setup6(Listiner string, args ...string) (handler.Handler6, error) {
+	h6, _, err := setupFile(Listiner, true, args...)
 	return h6, err
 }
 
-func setup4(args ...string) (handler.Handler4, error) {
-	_, h4, err := setupFile(false, args...)
+func setup4(Listiner string, args ...string) (handler.Handler4, error) {
+	_, h4, err := setupFile(Listiner, false, args...)
 	return h4, err
 }
 
-func setupFile(v6 bool, args ...string) (handler.Handler6, handler.Handler4, error) {
+func setupFile(Listiner string, v6 bool, args ...string) (handler.Handler6, handler.Handler4, error) {
 	var err error
 	if len(args) < 1 {
 		return nil, nil, errors.New("need a file name")
@@ -220,7 +231,7 @@ func setupFile(v6 bool, args ...string) (handler.Handler6, handler.Handler4, err
 	}
 
 	// load initial database from lease file
-	if err = loadFromFile(v6, filename); err != nil {
+	if err = loadFromFile(Listiner, v6, filename); err != nil {
 		return nil, nil, err
 	}
 
@@ -242,32 +253,32 @@ func setupFile(v6 bool, args ...string) (handler.Handler6, handler.Handler4, err
 		// on the file
 		go func() {
 			for range watcher.Events {
-				err := loadFromFile(v6, filename)
+				err := loadFromFile(Listiner, v6, filename)
 				if err != nil {
 					log.Warningf("failed to refresh from %s: %s", filename, err)
 
 					continue
 				}
 
-				log.Infof("updated to %d leases from %s", len(StaticRecords), filename)
+				log.Infof("updated to %d leases from %s", len(StaticRecords[Listiner]), filename)
 			}
 		}()
 	}
 
-	log.Infof("loaded %d leases from %s", len(StaticRecords), filename)
+	log.Infof("loaded %d leases from %s", len(StaticRecords[Listiner]), filename)
 	return Handler6, Handler4, nil
 }
 
-func loadFromFile(v6 bool, filename string) error {
+func loadFromFile(Listiner string, v6 bool, filename string) error {
 	var err error
 	var records map[string]net.IP
 	var protver int
 	if v6 {
 		protver = 6
-		records, err = LoadDHCPv6Records(filename)
+		records, err = LoadDHCPv6Records(Listiner, filename)
 	} else {
 		protver = 4
-		records, err = LoadDHCPv4Records(filename)
+		records, err = LoadDHCPv4Records(Listiner, filename)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to load DHCPv%d records: %w", protver, err)
@@ -276,7 +287,7 @@ func loadFromFile(v6 bool, filename string) error {
 	recLock.Lock()
 	defer recLock.Unlock()
 
-	StaticRecords = records
+	StaticRecords[Listiner] = records
 
 	return nil
 }

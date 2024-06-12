@@ -24,22 +24,28 @@ var Plugin = plugins.Plugin{
 
 var (
 	log         = logger.GetLogger("plugins/lease_time")
-	v4LeaseTime time.Duration
+	v4LeaseTime map[string]time.Duration
 )
 
+func init() {
+        v4LeaseTime = make(map[string]time.Duration)
+}
+
+
+
 // Handler4 handles DHCPv4 packets for the lease_time plugin.
-func Handler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
+func Handler4(Listiner string, req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
 	if req.OpCode != dhcpv4.OpcodeBootRequest {
 		return resp, false
 	}
 	// Set lease time unless it has already been set
 	if !resp.Options.Has(dhcpv4.OptionIPAddressLeaseTime) {
-		resp.Options.Update(dhcpv4.OptIPAddressLeaseTime(v4LeaseTime))
+		resp.Options.Update(dhcpv4.OptIPAddressLeaseTime(v4LeaseTime[Listiner]))
 	}
 	return resp, false
 }
 
-func setup4(args ...string) (handler.Handler4, error) {
+func setup4(Listiner string, args ...string) (handler.Handler4, error) {
 	log.Print("loading `lease_time` plugin for DHCPv4")
 	if len(args) < 1 {
 		log.Error("No default lease time provided")
@@ -51,7 +57,7 @@ func setup4(args ...string) (handler.Handler4, error) {
 		log.Errorf("invalid duration: %v", args[0])
 		return nil, errors.New("lease_time failed to initialize")
 	}
-	v4LeaseTime = leaseTime
+	v4LeaseTime[Listiner] = leaseTime
 
 	return Handler4, nil
 }

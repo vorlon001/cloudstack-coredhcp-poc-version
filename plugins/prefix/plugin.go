@@ -44,7 +44,7 @@ var Plugin = plugins.Plugin{
 
 const leaseDuration = 3600 * time.Second
 
-func setupPrefix(args ...string) (handler.Handler6, error) {
+func setupPrefix(Listiner string, args ...string) (handler.Handler6, error) {
 	// - prefix: 2001:db8::/48 64
 	if len(args) < 2 {
 		return nil, errors.New("Need both a subnet and an allocation max size")
@@ -103,7 +103,7 @@ func recordKey(d dhcpv6.DUID) string {
 }
 
 // Handle processes DHCPv6 packets for the prefix plugin for a given allocator/leaseset
-func (h *Handler) Handle(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
+func (h *Handler) Handle(Listiner string, req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
 	msg, err := req.GetInnerMessage()
 	if err != nil {
 		log.Error(err)

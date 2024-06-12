@@ -46,7 +46,7 @@ var argMap = map[string]dhcpv4.AutoConfiguration{
 	"AutoConfigure":      dhcpv4.AutoConfigure,
 }
 
-func setup4(args ...string) (handler.Handler4, error) {
+func setup4(Listiner string, args ...string) (handler.Handler4, error) {
 	if len(args) > 0 {
 		var ok bool
 		autoconfigure, ok = argMap[args[0]]
@@ -60,7 +60,7 @@ func setup4(args ...string) (handler.Handler4, error) {
 	return Handler4, nil
 }
 
-func Handler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
+func Handler4(Listiner string, req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
 	if resp.MessageType() != dhcpv4.MessageTypeOffer || !resp.YourIPAddr.IsUnspecified() {
 		return resp, false
 	}

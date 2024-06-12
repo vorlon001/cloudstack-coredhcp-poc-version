@@ -7,7 +7,7 @@ package dns
 import (
 	"errors"
 	"net"
-
+	"fmt"
 	"github.com/coredhcp/coredhcp/handler"
 	"github.com/coredhcp/coredhcp/logger"
 	"github.com/coredhcp/coredhcp/plugins"
@@ -25,27 +25,37 @@ var Plugin = plugins.Plugin{
 }
 
 var (
-	dnsServers6 []net.IP
-	dnsServers4 []net.IP
+	dnsServers6 map[string][]net.IP
+	dnsServers4 map[string][]net.IP
 )
 
-func setup6(args ...string) (handler.Handler6, error) {
+
+func init() {
+        dnsServers6 = make(map[string][]net.IP)
+        dnsServers4 = make(map[string][]net.IP)
+}
+
+
+
+func setup6(Listiner string, args ...string) (handler.Handler6, error) {
 	if len(args) < 1 {
 		return nil, errors.New("need at least one DNS server")
 	}
+	dnsServers6[Listiner] = make([]net.IP, 0)
 	for _, arg := range args {
 		server := net.ParseIP(arg)
 		if server.To16() == nil {
 			return Handler6, errors.New("expected an DNS server address, got: " + arg)
 		}
-		dnsServers6 = append(dnsServers6, server)
+		dnsServers6[Listiner] = append(dnsServers6[Listiner], server)
 	}
-	log.Infof("loaded %d DNS servers.", len(dnsServers6))
+	log.Infof("loaded %d DNS servers.", len(dnsServers6[Listiner]))
 	return Handler6, nil
 }
 
-func setup4(args ...string) (handler.Handler4, error) {
+func setup4(Listiner string, args ...string) (handler.Handler4, error) {
 	log.Printf("loaded plugin for DHCPv4.")
+        dnsServers4[Listiner] = make([]net.IP, 0)
 	if len(args) < 1 {
 		return nil, errors.New("need at least one DNS server")
 	}
@@ -54,14 +64,15 @@ func setup4(args ...string) (handler.Handler4, error) {
 		if DNSServer.To4() == nil {
 			return Handler4, errors.New("expected an DNS server address, got: " + arg)
 		}
-		dnsServers4 = append(dnsServers4, DNSServer)
+		dnsServers4[Listiner] = append(dnsServers4[Listiner], DNSServer)
 	}
-	log.Infof("loaded %d DNS servers.", len(dnsServers4))
+	log.Infof("loaded %d DNS servers.", len(dnsServers4[Listiner]))
 	return Handler4, nil
 }
 
 // Handler6 handles DHCPv6 packets for the dns plugin
-func Handler6(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
+func Handler6(Listiner string, req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
+        log.Infof(fmt.Sprintf("DNS Server: Handler4: %v,%v\n\t%v\n", Listiner, dnsServers6[Listiner],req))
 	decap, err := req.GetInnerMessage()
 	if err != nil {
 		log.Errorf("Could not decapsulate relayed message, aborting: %v", err)
@@ -69,15 +80,16 @@ func Handler6(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
 	}
 
 	if decap.IsOptionRequested(dhcpv6.OptionDNSRecursiveNameServer) {
-		resp.UpdateOption(dhcpv6.OptDNS(dnsServers6...))
+		resp.UpdateOption(dhcpv6.OptDNS(dnsServers6[Listiner]...))
 	}
 	return resp, false
 }
 
 //Handler4 handles DHCPv4 packets for the dns plugin
-func Handler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
+func Handler4(Listiner string, req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
+        log.Infof(fmt.Sprintf("DNS Server: Handler4: %v,%v\n\t%v\n", Listiner, dnsServers6[Listiner],req))
 	if req.IsOptionRequested(dhcpv4.OptionDomainNameServer) {
-		resp.Options.Update(dhcpv4.OptDNS(dnsServers4...))
+		resp.Options.Update(dhcpv4.OptDNS(dnsServers4[Listiner]...))
 	}
 	return resp, false
 }

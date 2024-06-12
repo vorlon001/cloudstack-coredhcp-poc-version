@@ -8,7 +8,7 @@ import (
 	"errors"
 	"net"
 	"strings"
-
+	"fmt"
 	"github.com/coredhcp/coredhcp/handler"
 	"github.com/coredhcp/coredhcp/logger"
 	"github.com/coredhcp/coredhcp/plugins"
@@ -23,17 +23,22 @@ var Plugin = plugins.Plugin{
 	Setup4: setup4,
 }
 
-var routes dhcpv4.Routes
+var routes map[string]dhcpv4.Routes
 
-func setup4(args ...string) (handler.Handler4, error) {
+func init() {
+	routes = make(map[string]dhcpv4.Routes)
+}
+
+
+func setup4(Listiner string, args ...string) (handler.Handler4, error) {
 	log.Printf("loaded plugin for DHCPv4.")
-	routes = make(dhcpv4.Routes, 0)
 
 	if len(args) < 1 {
 		return nil, errors.New("need at least one static route")
 	}
 
 	var err error
+	routes[Listiner] = make(dhcpv4.Routes, 0)
 	for _, arg := range args {
 		fields := strings.Split(arg, ",")
 		if len(fields) != 2 {
@@ -51,7 +56,7 @@ func setup4(args ...string) (handler.Handler4, error) {
 			return Handler4, errors.New("expected a gateway address, got: " + fields[1])
 		}
 
-		routes = append(routes, route)
+		routes[Listiner] = append(routes[Listiner], route)
 		log.Debugf("adding static route %s", route)
 	}
 
@@ -61,11 +66,12 @@ func setup4(args ...string) (handler.Handler4, error) {
 }
 
 // Handler4 handles DHCPv4 packets for the static routes plugin
-func Handler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
+func Handler4(Listiner string, req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
+	log.Infof(fmt.Sprintf("ROUTER: Handler4: %v,%v\n\t%v\n", Listiner, routes[Listiner],req))
 	if len(routes) > 0 {
 		resp.Options.Update(dhcpv4.Option{
 			Code:  dhcpv4.OptionCode(dhcpv4.OptionClasslessStaticRoute),
-			Value: routes,
+			Value: routes[Listiner],
 		})
 	}
 

@@ -113,8 +113,8 @@ func listen6(a *net.UDPAddr) (*listener6, error) {
 
 // Start will start the server asynchronously. See `Wait` to wait until
 // the execution ends.
-func Start(config *config.Config) (*Servers, error) {
-	handlers4, handlers6, err := plugins.LoadPlugins(config)
+func Start(Listiner string, config *config.Config, RegisteredPlugins map[string]*plugins.Plugin) (*Servers, error) {
+	handlers4, handlers6, err := plugins.LoadPlugins(Listiner, RegisteredPlugins, config)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +134,7 @@ func Start(config *config.Config) (*Servers, error) {
 			l6.handlers = handlers6
 			srv.listeners = append(srv.listeners, l6)
 			go func() {
-				srv.errors <- l6.Serve()
+				srv.errors <- l6.Serve(Listiner)
 			}()
 		}
 	}
@@ -150,7 +150,7 @@ func Start(config *config.Config) (*Servers, error) {
 			l4.handlers = handlers4
 			srv.listeners = append(srv.listeners, l4)
 			go func() {
-				srv.errors <- l4.Serve()
+				srv.errors <- l4.Serve(Listiner)
 			}()
 		}
 	}

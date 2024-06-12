@@ -12,6 +12,9 @@ import (
 	"net"
 	"sync"
 	"time"
+	"os"
+	"bytes"
+	"strings"
 
 	"github.com/coredhcp/coredhcp/handler"
 	"github.com/coredhcp/coredhcp/logger"
@@ -22,6 +25,15 @@ import (
 )
 
 var log = logger.GetLogger("plugins/range")
+
+// StaticRecords holds a MAC -> IP address mapping
+var StaticRecords map[string]map[string]net.IP
+var recLock sync.RWMutex
+
+func init() {
+        StaticRecords = make(map[string]map[string]net.IP)
+}
+
 
 // Plugin wraps plugin registration information
 var Plugin = plugins.Plugin{
@@ -48,7 +60,18 @@ type PluginState struct {
 }
 
 // Handler4 handles DHCPv4 packets for the range plugin
-func (p *PluginState) Handler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
+func (p *PluginState) Handler4(Listiner string, req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
+
+        log.Infof(fmt.Sprintf("RANGE: Handler4: %v %v %v\n", Listiner, req, req.ClientHWAddr.String()))
+	log.Infof(fmt.Sprintf("RANGE: Handler4: %v %v\n", Listiner, StaticRecords[Listiner]))
+
+        _, ok := StaticRecords[Listiner][req.ClientHWAddr.String()]
+        if ok {
+                log.Warningf("Listiner: %s, MAC address %s found in Static Pool", Listiner, req.ClientHWAddr.String())
+                return resp, false
+        }
+
+
 	p.Lock()
 	defer p.Unlock()
 	record, ok := p.Recordsv4[req.ClientHWAddr.String()]
@@ -86,17 +109,17 @@ func (p *PluginState) Handler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) 
 	}
 	resp.YourIPAddr = record.IP
 	resp.Options.Update(dhcpv4.OptIPAddressLeaseTime(p.LeaseTime.Round(time.Second)))
-	log.Printf("found IP address %s for MAC %s", record.IP, req.ClientHWAddr.String())
+	log.Printf("Listiner: %s, found IP address %s for MAC %s", Listiner, record.IP, req.ClientHWAddr.String())
 	return resp, false
 }
 
-func setupRange(args ...string) (handler.Handler4, error) {
+func setupRange(Listiner string, args ...string) (handler.Handler4, error) {
 	var (
 		err error
 		p   PluginState
 	)
 
-	if len(args) < 4 {
+	if len(args) < 5 {
 		return nil, fmt.Errorf("invalid number of arguments, want: 4 (file name, start IP, end IP, lease time), got: %d", len(args))
 	}
 	filename := args[0]
@@ -145,5 +168,112 @@ func setupRange(args ...string) (handler.Handler4, error) {
 		}
 	}
 
+
+
+        // load initial database from lease file
+        if err = loadFromFile(Listiner, false, args[4]); err != nil {
+                return nil, fmt.Errorf("Error load %s", args[4]);
+        }
+
+
 	return p.Handler4, nil
+}
+
+
+func loadFromFile(Listiner string, v6 bool, filename string) error {
+        var err error
+        var records map[string]net.IP
+        var protver int
+        if v6 {
+                protver = 6
+                records, err = LoadDHCPv6Records(Listiner, filename)
+        } else {
+                protver = 4
+                records, err = LoadDHCPv4Records(Listiner, filename)
+        }
+        if err != nil {
+                return fmt.Errorf("failed to load DHCPv%d records: %w", protver, err)
+        }
+
+        recLock.Lock()
+        defer recLock.Unlock()
+
+        StaticRecords[Listiner] = records
+
+        return nil
+}
+
+
+// LoadDHCPv4Records loads the DHCPv4Records global map with records stored on
+// the specified file. The records have to be one per line, a mac address and an
+// IPv4 address.
+func LoadDHCPv4Records(Listiner string, filename string) (map[string]net.IP, error) {
+        log.Infof("reading leases from %s, %s", Listiner, filename)
+        data, err := os.ReadFile(filename)
+        if err != nil {
+                return nil, err
+        }
+        records := make(map[string]net.IP)
+        for _, lineBytes := range bytes.Split(data, []byte{'\n'}) {
+                line := string(lineBytes)
+                if len(line) == 0 {
+                        continue
+                }
+                if strings.HasPrefix(line, "#") {
+                        continue
+                }
+                tokens := strings.Fields(line)
+                if len(tokens) != 2 {
+                        return nil, fmt.Errorf("malformed line, want 2 fields, got %d: %s", len(tokens), line)
+                }
+                hwaddr, err := net.ParseMAC(tokens[0])
+                if err != nil {
+                        return nil, fmt.Errorf("malformed hardware address: %s", tokens[0])
+                }
+                ipaddr := net.ParseIP(tokens[1])
+                if ipaddr.To4() == nil {
+                        return nil, fmt.Errorf("expected an IPv4 address, got: %v", ipaddr)
+                }
+                records[hwaddr.String()] = ipaddr
+        }
+
+        return records, nil
+}
+
+
+
+
+// LoadDHCPv6Records loads the DHCPv6Records global map with records stored on
+// the specified file. The records have to be one per line, a mac address and an
+// IPv6 address.
+func LoadDHCPv6Records(Listiner string, filename string) (map[string]net.IP, error) {
+        log.Infof("reading leases from %s, %s", Listiner, filename)
+        data, err := os.ReadFile(filename)
+        if err != nil {
+                return nil, err
+        }
+        records := make(map[string]net.IP)
+        for _, lineBytes := range bytes.Split(data, []byte{'\n'}) {
+                line := string(lineBytes)
+                if len(line) == 0 {
+                        continue
+                }
+                if strings.HasPrefix(line, "#") {
+                        continue
+                }
+                tokens := strings.Fields(line)
+                if len(tokens) != 2 {
+                        return nil, fmt.Errorf("malformed line, want 2 fields, got %d: %s", len(tokens), line)
+                }
+                hwaddr, err := net.ParseMAC(tokens[0])
+                if err != nil {
+                        return nil, fmt.Errorf("malformed hardware address: %s", tokens[0])
+                }
+                ipaddr := net.ParseIP(tokens[1])
+                if ipaddr.To16() == nil || ipaddr.To4() != nil {
+                        return nil, fmt.Errorf("expected an IPv6 address, got: %v", ipaddr)
+                }
+                records[hwaddr.String()] = ipaddr
+        }
+        return records, nil
 }

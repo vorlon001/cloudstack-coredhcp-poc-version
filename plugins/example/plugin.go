@@ -74,14 +74,14 @@ var Plugin = plugins.Plugin{
 // `exampleHandler6` function. Such function will be called for every DHCPv6
 // packet that the server receives. Remember that a handler may not be called
 // for each packet, if the handler chain is interrupted before reaching it.
-func setup6(args ...string) (handler.Handler6, error) {
+func setup6(Listiner string, args ...string) (handler.Handler6, error) {
 	log.Printf("loaded plugin for DHCPv6.")
 	return exampleHandler6, nil
 }
 
 // setup4 behaves like setupExample6, but for DHCPv4 packets. It
 // implements the `plugin.SetupFunc4` interface.
-func setup4(args ...string) (handler.Handler4, error) {
+func setup4(Listiner string, args ...string) (handler.Handler4, error) {
 	log.Printf("loaded plugin for DHCPv4.")
 	return exampleHandler4, nil
 }
@@ -99,7 +99,7 @@ func setup4(args ...string) (handler.Handler4, error) {
 // respond to the client (or drop the response, if nil). If `false`, the server
 // will call the next plugin in the chan, using the returned response packet as
 // input for the next plugin.
-func exampleHandler6(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
+func exampleHandler6(Listiner string, req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
 	log.Printf("received DHCPv6 packet: %s", req.Summary())
 	// return the unmodified response, and false. This means that the next
 	// plugin in the chain will be called, and the unmodified response packet
@@ -109,7 +109,7 @@ func exampleHandler6(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
 
 // exampleHandler4 behaves like exampleHandler6, but for DHCPv4 packets. It
 // implements the `handler.Handler4` interface.
-func exampleHandler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
+func exampleHandler4(Listiner string, req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
 	log.Printf("received DHCPv4 packet: %s", req.Summary())
 	// return the unmodified response, and false. This means that the next
 	// plugin in the chain will be called, and the unmodified response packet

@@ -8,7 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"net"
-
+	"fmt"
 	"github.com/coredhcp/coredhcp/handler"
 	"github.com/coredhcp/coredhcp/logger"
 	"github.com/coredhcp/coredhcp/plugins"
@@ -24,10 +24,15 @@ var Plugin = plugins.Plugin{
 }
 
 var (
-	netmask net.IPMask
+	netmask map[string]net.IPMask
 )
 
-func setup4(args ...string) (handler.Handler4, error) {
+func init() {
+        netmask = make(map[string]net.IPMask)
+}
+
+
+func setup4(Listiner string, args ...string) (handler.Handler4, error) {
 	log.Printf("loaded plugin for DHCPv4.")
 	if len(args) != 1 {
 		return nil, errors.New("need at least one netmask IP address")
@@ -40,8 +45,8 @@ func setup4(args ...string) (handler.Handler4, error) {
 	if netmaskIP == nil {
 		return nil, errors.New("expected an netmask address, got: " + args[0])
 	}
-	netmask = net.IPv4Mask(netmaskIP[0], netmaskIP[1], netmaskIP[2], netmaskIP[3])
-	if !checkValidNetmask(netmask) {
+	netmask[Listiner] = net.IPv4Mask(netmaskIP[0], netmaskIP[1], netmaskIP[2], netmaskIP[3])
+	if !checkValidNetmask(netmask[Listiner]) {
 		return nil, errors.New("netmask is not valid, got: " + args[0])
 	}
 	log.Printf("loaded client netmask")
@@ -49,8 +54,9 @@ func setup4(args ...string) (handler.Handler4, error) {
 }
 
 //Handler4 handles DHCPv4 packets for the netmask plugin
-func Handler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
-	resp.Options.Update(dhcpv4.OptSubnetMask(netmask))
+func Handler4(Listiner string, req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
+        log.Infof(fmt.Sprintf("NETMASK: Handler4: %v,%v\n\t%v\n", Listiner, netmask[Listiner],req))
+	resp.Options.Update(dhcpv4.OptSubnetMask(netmask[Listiner]))
 	return resp, false
 }
 

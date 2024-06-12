@@ -9,13 +9,14 @@ package main
 import (
 	"fmt"
 	"io"
-	"os"
+//	"os"
 
 	"github.com/coredhcp/coredhcp/config"
 	"github.com/coredhcp/coredhcp/logger"
-	"github.com/coredhcp/coredhcp/server"
+	//"github.com/coredhcp/coredhcp/server"
 
-	"github.com/coredhcp/coredhcp/plugins"
+//	"github.com/coredhcp/coredhcp/plugins"
+/*
 	pl_autoconfigure "github.com/coredhcp/coredhcp/plugins/autoconfigure"
 	pl_dns "github.com/coredhcp/coredhcp/plugins/dns"
 	pl_file "github.com/coredhcp/coredhcp/plugins/file"
@@ -31,7 +32,8 @@ import (
 	pl_serverid "github.com/coredhcp/coredhcp/plugins/serverid"
 	pl_sleep "github.com/coredhcp/coredhcp/plugins/sleep"
 	pl_staticroute "github.com/coredhcp/coredhcp/plugins/staticroute"
-
+        pl_example "github.com/coredhcp/coredhcp/plugins/example"
+*/
 	"github.com/sirupsen/logrus"
 	flag "github.com/spf13/pflag"
 )
@@ -39,7 +41,7 @@ import (
 var (
 	flagLogFile     = flag.StringP("logfile", "l", "", "Name of the log file to append to. Default: stdout/stderr only")
 	flagLogNoStdout = flag.BoolP("nostdout", "N", false, "Disable logging to stdout/stderr")
-	flagLogLevel    = flag.StringP("loglevel", "L", "info", fmt.Sprintf("Log level. One of %v", getLogLevels()))
+	flagLogLevel    = flag.StringP("loglevel", "L", "debug", fmt.Sprintf("Log level. One of %v", getLogLevels()))
 	flagConfig      = flag.StringP("conf", "c", "", "Use this configuration file instead of the default location")
 	flagPlugins     = flag.BoolP("plugins", "P", false, "list plugins")
 )
@@ -60,33 +62,68 @@ func getLogLevels() []string {
 	}
 	return levels
 }
-
+/*
 var desiredPlugins = []*plugins.Plugin{
-	&pl_autoconfigure.Plugin,
-	&pl_dns.Plugin,
-	&pl_file.Plugin,
-	&pl_ipv6only.Plugin,
-	&pl_leasetime.Plugin,
-	&pl_mtu.Plugin,
-	&pl_nbp.Plugin,
-	&pl_netmask.Plugin,
-	&pl_prefix.Plugin,
-	&pl_range.Plugin,
-	&pl_router.Plugin,
-	&pl_searchdomains.Plugin,
-	&pl_serverid.Plugin,
-	&pl_sleep.Plugin,
-	&pl_staticroute.Plugin,
+        &pl_autoconfigure.Plugin,
+        &pl_dns.Plugin,
+        &pl_file.Plugin,
+        &pl_ipv6only.Plugin,
+        &pl_leasetime.Plugin,
+        &pl_mtu.Plugin,
+        &pl_nbp.Plugin,
+        &pl_netmask.Plugin,
+        &pl_prefix.Plugin,
+        &pl_range.Plugin,
+        &pl_router.Plugin,
+        &pl_searchdomains.Plugin,
+        &pl_serverid.Plugin,
+        &pl_sleep.Plugin,
+        &pl_staticroute.Plugin,
+        &pl_example.Plugin,
+}
+*/
+
+func RunJob(configByte []byte, logs *logrus.Entry) {
+
+        config, err := config.Load("vlan200", "yml", configByte, *flagConfig)
+        if err != nil {
+                logs.Fatalf("Failed to load configuration: %v", err)
+        }
+
+/*        // register plugins
+        for _, plugin := range desiredPlugins {
+                if err := plugins.RegisterPlugin(plugin); err != nil {
+                        logs.Fatalf("Failed to register plugin '%s': %v", plugin.Name, err)
+                }
+        }*/
+
+	fmt.Printf("DEBUG:\n\t%v\n%#v\n", config, config.Server4.Plugins)
+
+
+	for k,v := range config.Server4.Plugins {
+		fmt.Printf("DEBUG:\n %#v, %#v\n", k, v)
+	}
+
+/*        // start server
+        srv, err := server.Start(config)
+        if err != nil {
+                logs.Fatal(err)
+        }
+        if err := srv.Wait(); err != nil {
+                logs.Error(err)
+        }
+*/
 }
 
 func main() {
 	flag.Parse()
 
 	if *flagPlugins {
-		for _, p := range desiredPlugins {
+/*		for _, p := range desiredPlugins {
 			fmt.Println(p.Name)
 		}
 		os.Exit(0)
+*/
 	}
 
 	log := logger.GetLogger("main")
@@ -104,23 +141,27 @@ func main() {
 		log.Infof("Disabling logging to stdout/stderr")
 		logger.WithNoStdOutErr(log)
 	}
-	config, err := config.Load(*flagConfig)
-	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
-	}
-	// register plugins
-	for _, plugin := range desiredPlugins {
-		if err := plugins.RegisterPlugin(plugin); err != nil {
-			log.Fatalf("Failed to register plugin '%s': %v", plugin.Name, err)
-		}
-	}
 
-	// start server
-	srv, err := server.Start(config)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := srv.Wait(); err != nil {
-		log.Error(err)
-	}
+
+        var configByte = []byte(`
+server4:
+    listen:
+        - "%vlan200"
+    plugins:
+        - lease_time: 3600s
+        - server_id: 192.168.1.10
+        - file: file_leases_vlan200.txt
+        - dns: 192.168.200.1
+        - mtu: 1500
+        - searchdomains: cloud.local
+        - router: 192.168.200.1
+        - netmask: 255.255.255.255
+        - range: leases_vlan200.txt 192.168.200.10 192.168.200.50 60s file_leases_vlan200.txt
+        - staticroute: 10.20.20.0/24,192.168.200.1 0.0.0.0/0,192.168.200.1
+`)
+
+
+	fmt.Printf("%T\n",log)
+	RunJob(configByte, log)
+
 }

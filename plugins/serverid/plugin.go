@@ -28,12 +28,20 @@ var Plugin = plugins.Plugin{
 
 // v6ServerID is the DUID of the v6 server
 var (
-	v6ServerID dhcpv6.DUID
-	v4ServerID net.IP
+	v6ServerID map[string]dhcpv6.DUID
+	v4ServerID map[string]net.IP
 )
 
+func init() {
+
+        v6ServerID = make(map[string]dhcpv6.DUID)
+        v4ServerID = make(map[string]net.IP)
+
+}
+
+
 // Handler6 handles DHCPv6 packets for the server_id plugin.
-func Handler6(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
+func Handler6(Listiner string, req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
 	if v6ServerID == nil {
 		log.Fatal("BUG: Plugin is running uninitialized!")
 		return nil, true
@@ -56,7 +64,7 @@ func Handler6(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
 		}
 
 		// Approximately all others MUST be discarded if the ServerID doesn't match
-		if !sid.Equal(v6ServerID) {
+		if !sid.Equal(v6ServerID[Listiner]) {
 			log.Infof("requested server ID does not match this server's ID. Got %v, want %v", sid, v6ServerID)
 			return nil, true
 		}
@@ -68,12 +76,12 @@ func Handler6(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
 		// These message types MUST be discarded if they *don't* contain a ServerID option
 		return nil, true
 	}
-	dhcpv6.WithServerID(v6ServerID)(resp)
+	dhcpv6.WithServerID(v6ServerID[Listiner])(resp)
 	return resp, false
 }
 
 // Handler4 handles DHCPv4 packets for the server_id plugin.
-func Handler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
+func Handler4(Listiner string, req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
 	if v4ServerID == nil {
 		log.Fatal("BUG: Plugin is running uninitialized!")
 		return nil, true
@@ -84,18 +92,18 @@ func Handler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
 	}
 	if req.ServerIPAddr != nil &&
 		!req.ServerIPAddr.Equal(net.IPv4zero) &&
-		!req.ServerIPAddr.Equal(v4ServerID) {
+		!req.ServerIPAddr.Equal(v4ServerID[Listiner]) {
 		// This request is not for us, drop it.
 		log.Infof("requested server ID does not match this server's ID. Got %v, want %v", req.ServerIPAddr, v4ServerID)
 		return nil, true
 	}
 	resp.ServerIPAddr = make(net.IP, net.IPv4len)
-	copy(resp.ServerIPAddr[:], v4ServerID)
-	resp.UpdateOption(dhcpv4.OptServerIdentifier(v4ServerID))
+	copy(resp.ServerIPAddr[:], v4ServerID[Listiner])
+	resp.UpdateOption(dhcpv4.OptServerIdentifier(v4ServerID[Listiner]))
 	return resp, false
 }
 
-func setup4(args ...string) (handler.Handler4, error) {
+func setup4(Listiner string, args ...string) (handler.Handler4, error) {
 	log.Printf("loading `server_id` plugin for DHCPv4 with args: %v", args)
 	if len(args) < 1 {
 		return nil, errors.New("need an argument")
@@ -107,11 +115,11 @@ func setup4(args ...string) (handler.Handler4, error) {
 	if serverID.To4() == nil {
 		return nil, errors.New("not a valid IPv4 address")
 	}
-	v4ServerID = serverID.To4()
+	v4ServerID[Listiner] = serverID.To4()
 	return Handler4, nil
 }
 
-func setup6(args ...string) (handler.Handler6, error) {
+func setup6(Listiner string, args ...string) (handler.Handler6, error) {
 	log.Printf("loading `server_id` plugin for DHCPv6 with args: %v", args)
 	if len(args) < 2 {
 		return nil, errors.New("need a DUID type and value")
@@ -131,13 +139,13 @@ func setup6(args ...string) (handler.Handler6, error) {
 	}
 	switch duidType {
 	case "ll", "duid-ll", "duid_ll":
-		v6ServerID = &dhcpv6.DUIDLL{
+		v6ServerID[Listiner] = &dhcpv6.DUIDLL{
 			// sorry, only ethernet for now
 			HWType:        iana.HWTypeEthernet,
 			LinkLayerAddr: hwaddr,
 		}
 	case "llt", "duid-llt", "duid_llt":
-		v6ServerID = &dhcpv6.DUIDLLT{
+		v6ServerID[Listiner] = &dhcpv6.DUIDLLT{
 			// sorry, zero-time for now
 			Time: 0,
 			// sorry, only ethernet for now

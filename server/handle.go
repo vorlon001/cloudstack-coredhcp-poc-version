@@ -20,7 +20,7 @@ import (
 // HandleMsg6 runs for every received DHCPv6 packet. It will run every
 // registered handler in sequence, and reply with the resulting response.
 // It will not reply if the resulting response is `nil`.
-func (l *listener6) HandleMsg6(buf []byte, oob *ipv6.ControlMessage, peer *net.UDPAddr) {
+func (l *listener6) HandleMsg6(Listiner string, buf []byte, oob *ipv6.ControlMessage, peer *net.UDPAddr) {
 	d, err := dhcpv6.FromBytes(buf)
 	bufpool.Put(&buf)
 	if err != nil {
@@ -57,7 +57,7 @@ func (l *listener6) HandleMsg6(buf []byte, oob *ipv6.ControlMessage, peer *net.U
 
 	var stop bool
 	for _, handler := range l.handlers {
-		resp, stop = handler(d, resp)
+		resp, stop = handler(Listiner, d, resp)
 		if stop {
 			break
 		}
@@ -99,7 +99,7 @@ func (l *listener6) HandleMsg6(buf []byte, oob *ipv6.ControlMessage, peer *net.U
 	}
 }
 
-func (l *listener4) HandleMsg4(buf []byte, oob *ipv4.ControlMessage, _peer net.Addr) {
+func (l *listener4) HandleMsg4(Listiner string, buf []byte, oob *ipv4.ControlMessage, _peer net.Addr) {
 	var (
 		resp, tmp *dhcpv4.DHCPv4
 		err       error
@@ -133,8 +133,9 @@ func (l *listener4) HandleMsg4(buf []byte, oob *ipv4.ControlMessage, _peer net.A
 	}
 
 	resp = tmp
-	for _, handler := range l.handlers {
-		resp, stop = handler(req, resp)
+	for i, handler := range l.handlers {
+		resp, stop = handler(Listiner, req, resp)
+		log.Debug("EVENTS:", i, handler, req, resp, stop)
 		if stop {
 			break
 		}
@@ -203,7 +204,7 @@ const MaxDatagram = 1 << 16
 // XXX: investigate using RecvMsgs to batch messages and reduce syscalls
 
 // Serve6 handles datagrams received on conn and passes them to the pluginchain
-func (l *listener6) Serve() error {
+func (l *listener6) Serve(Listiner string) error {
 	log.Printf("Listen %s", l.LocalAddr())
 	for {
 		b := *bufpool.Get().(*[]byte)
@@ -217,12 +218,12 @@ func (l *listener6) Serve() error {
 			log.Printf("Error reading from connection: %v", err)
 			return err
 		}
-		go l.HandleMsg6(b[:n], oob, peer.(*net.UDPAddr))
+		go l.HandleMsg6(Listiner, b[:n], oob, peer.(*net.UDPAddr))
 	}
 }
 
 // Serve6 handles datagrams received on conn and passes them to the pluginchain
-func (l *listener4) Serve() error {
+func (l *listener4) Serve(Listiner string) error {
 	log.Printf("Listen %s", l.LocalAddr())
 	for {
 		b := *bufpool.Get().(*[]byte)
@@ -236,6 +237,6 @@ func (l *listener4) Serve() error {
 			log.Printf("Error reading from connection: %v", err)
 			return err
 		}
-		go l.HandleMsg4(b[:n], oob, peer.(*net.UDPAddr))
+		go l.HandleMsg4(Listiner, b[:n], oob, peer.(*net.UDPAddr))
 	}
 }

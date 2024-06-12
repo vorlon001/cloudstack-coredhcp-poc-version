@@ -35,7 +35,7 @@ var Plugin = plugins.Plugin{
 	Setup4: setup4,
 }
 
-func setup4(args ...string) (handler.Handler4, error) {
+func setup4(Listiner string, args ...string) (handler.Handler4, error) {
 	if len(args) > 0 {
 		dur, err := time.ParseDuration(args[0])
 		if err != nil {
@@ -50,7 +50,7 @@ func setup4(args ...string) (handler.Handler4, error) {
 	return Handler4, nil
 }
 
-func Handler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
+func Handler4(Listiner string, req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
 	v6pref := req.IsOptionRequested(dhcpv4.OptionIPv6OnlyPreferred)
 	log.WithFields(logrus.Fields{
 		"mac":      req.ClientHWAddr.String(),

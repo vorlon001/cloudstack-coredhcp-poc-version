@@ -7,6 +7,7 @@ package searchdomains
 // This is an searchdomains plugin that adds default DNS search domains.
 
 import (
+	"fmt"
 	"github.com/coredhcp/coredhcp/handler"
 	"github.com/coredhcp/coredhcp/logger"
 	"github.com/coredhcp/coredhcp/plugins"
@@ -38,8 +39,14 @@ var Plugin = plugins.Plugin{
 // Note that DHCPv4 and DHCPv6 options are totally independent.
 // If you need the same settings for both, you'll need to configure
 // this plugin once for the v4 and once for the v6 server.
-var v4SearchList []string
-var v6SearchList []string
+var v4SearchList map[string][]string
+var v6SearchList map[string][]string
+
+func init() {
+	v4SearchList = make(map[string][]string)
+	v6SearchList = make(map[string][]string)
+}
+
 
 // copySlice creates a new copy of a string slice in memory.
 // This helps to ensure that downstream plugins can't corrupt
@@ -50,28 +57,30 @@ func copySlice(original []string) []string {
 	return copied
 }
 
-func setup6(args ...string) (handler.Handler6, error) {
-	v6SearchList = args
-	log.Printf("Registered domain search list (DHCPv6) %s", v6SearchList)
+func setup6(Listiner string, args ...string) (handler.Handler6, error) {
+	v6SearchList[Listiner] = args
+	log.Printf("Listiner: %s, Registered domain search list (DHCPv6) %s, %s", Listiner, v6SearchList[Listiner], args)
 	return domainSearchListHandler6, nil
 }
 
-func setup4(args ...string) (handler.Handler4, error) {
-	v4SearchList = args
-	log.Printf("Registered domain search list (DHCPv4) %s", v4SearchList)
+func setup4(Listiner string, args ...string) (handler.Handler4, error) {
+	v4SearchList[Listiner] = args
+	log.Printf("Listiner: %s, Registered domain search list (DHCPv4) %s, %s", Listiner, v4SearchList[Listiner], args)
 	return domainSearchListHandler4, nil
 }
 
-func domainSearchListHandler6(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
+func domainSearchListHandler6(Listiner string, req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
+	log.Infof(fmt.Sprintf("ROUTER: DomainSearch: %v, %v, %v", Listiner, v6SearchList[Listiner], req))
 	resp.UpdateOption(dhcpv6.OptDomainSearchList(&rfc1035label.Labels{
-		Labels: copySlice(v6SearchList),
+		Labels: copySlice(v6SearchList[Listiner]),
 	}))
 	return resp, false
 }
 
-func domainSearchListHandler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
+func domainSearchListHandler4(Listiner string, req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
+	log.Infof(fmt.Sprintf("ROUTER: DomainSearch: %v, %v, %v", Listiner, v4SearchList[Listiner], req))
 	resp.UpdateOption(dhcpv4.OptDomainSearch(&rfc1035label.Labels{
-		Labels: copySlice(v4SearchList),
+		Labels: copySlice(v4SearchList[Listiner]),
 	}))
 	return resp, false
 }
